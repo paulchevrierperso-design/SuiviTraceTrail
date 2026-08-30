@@ -9,6 +9,8 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- Chart.js pour le profil d'altitude -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Parser FIT Garmin -->
+    <script src="https://cdn.jsdelivr.net/npm/fit-file-parser@1.9.0/dist/fit-parser.min.js"></script>
     <style>
         :root {
             --primary: #2563eb;
@@ -255,10 +257,7 @@
         Visualiseur de traces GPS gratuit & respectueux de la vie privée (traitement 100% local dans le navigateur).
     </footer>
 
-    <!-- Script de logique JS en ES Module -->
-    <script type="module">
-        import FitParser from 'https://cdn.jsdelivr.net/npm/fit-file-parser@1.9.0/+esm';
-
+    <script>
         // Initialisation Carte Leaflet
         const map = L.map('map').setView([46.603354, 1.888334], 6);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -370,7 +369,18 @@
 
         // --- PARSEUR FIT ---
         function parseFIT(arrayBuffer) {
-            const fitParser = new FitParser({
+            // Détection et sécurisation du constructeur FitParser
+            let FitParserClass = window.FitParser;
+            if (typeof FitParserClass !== 'function' && FitParserClass && typeof FitParserClass.default === 'function') {
+                FitParserClass = FitParserClass.default;
+            }
+
+            if (typeof FitParserClass !== 'function') {
+                showStatus("La bibliothèque de lecture .FIT n'a pas pu s'initialiser correctement.", 'error');
+                return;
+            }
+
+            const fitParser = new FitParserClass({
                 force: true,
                 speedUnit: 'km/h',
                 lengthUnit: 'km',
@@ -380,12 +390,12 @@
 
             fitParser.parse(arrayBuffer, (error, data) => {
                 if (error) {
-                    showStatus(`Erreur d'analyse FIT : ${error}`, 'error');
+                    showStatus(`Erreur d'analyse FIT : ${error.message || error}`, 'error');
                     return;
                 }
 
                 if (!data || !data.records || data.records.length === 0) {
-                    showStatus('Aucun enregistrement de géolocalisation trouvé dans ce fichier .FIT', 'error');
+                    showStatus('Aucun enregistrement trouvé dans ce fichier .FIT', 'error');
                     return;
                 }
 
@@ -394,7 +404,8 @@
                     if (rec.position_lat !== undefined && rec.position_long !== undefined) {
                         let lat = rec.position_lat;
                         let lon = rec.position_long;
-                        // Conversion semicircles -> degrés si nécessaire
+                        
+                        // Conversion semicircles Garmin -> degrés
                         if (Math.abs(lat) > 90) {
                             lat = lat * (180 / 2147483648);
                         }
@@ -480,7 +491,7 @@
             document.getElementById('stat-speed').textContent = speedText;
 
             statsContainer.style.display = 'grid';
-            showStatus(`Trace chargée avec succès : ${points.length} points GPS.`, 'info');
+            clearStatus();
 
             renderChart(distData, points.map(p => p.ele));
         }
