@@ -3,12 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visualiseur de Traces GPS (GPX & FIT)</title>
-
-    <!-- Carte Leaflet CSS -->
+    <title>Visualiseur GPX & FIT</title>
+    <!-- Leaflet CSS & JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Chart.js pour le profil d'altitude -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --danger: #ef4444;
+            --success: #10b981;
+        }
+
         * {
             box-sizing: border-box;
             margin: 0;
@@ -17,178 +30,260 @@
         }
 
         body {
-            background-color: #f4f6f9;
-            color: #333;
-            padding: 20px;
-            max-width: 1200px;
-            margin: 0 auto;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
         }
 
         header {
-            text-align: center;
-            margin-bottom: 25px;
+            background-color: var(--card-bg);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
 
-        header h1 {
-            color: #1a202c;
-            font-size: 1.8rem;
-            margin-bottom: 8px;
+        h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
         }
 
-        header p {
-            color: #718096;
-            font-size: 0.95rem;
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            flex: 1;
         }
 
-        .dropzone {
-            background: #ffffff;
-            border: 2px dashed #cbd5e0;
+        .drop-zone {
+            background-color: var(--card-bg);
+            border: 2px dashed #cbd5e1;
             border-radius: 12px;
-            padding: 30px;
+            padding: 2rem;
             text-align: center;
             cursor: pointer;
             transition: all 0.2s ease;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
         }
 
-        .dropzone:hover, .dropzone.dragover {
-            border-color: #3182ce;
-            background-color: #ebf8ff;
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: var(--primary);
+            background-color: #eff6ff;
         }
 
-        .dropzone p {
-            margin-top: 10px;
-            color: #4a5568;
+        .drop-zone p {
+            margin-top: 0.5rem;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .btn {
+            background-color: var(--primary);
+            color: white;
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-block;
+            margin-top: 0.75rem;
+            transition: background-color 0.2s;
+        }
+
+        .btn:hover {
+            background-color: var(--primary-hover);
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        .status-box {
+            display: none;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
             font-weight: 500;
         }
-
-        .dropzone input[type="file"] {
-            display: none;
+        .status-box.error {
+            display: block;
+            background-color: #fef2f2;
+            color: var(--danger);
+            border: 1px solid #fecaca;
+        }
+        .status-box.info {
+            display: block;
+            background-color: #eff6ff;
+            color: var(--primary);
+            border: 1px solid #bfdbfe;
         }
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
         }
 
         .stat-card {
-            background: #ffffff;
-            padding: 18px;
+            background: var(--card-bg);
+            padding: 1rem;
             border-radius: 10px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            border: 1px solid var(--border);
             text-align: center;
-            border-left: 4px solid #3182ce;
         }
 
         .stat-card .label {
-            font-size: 0.85rem;
-            color: #718096;
+            font-size: 0.8rem;
+            color: var(--text-muted);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 5px;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.25rem;
         }
 
         .stat-card .value {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #2d3748;
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--text);
         }
 
-        #status {
-            margin-bottom: 15px;
-            padding: 12px;
-            border-radius: 8px;
-            font-weight: 500;
-            display: none;
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
         }
 
-        #status.info { background: #e2e8f0; color: #2d3748; display: block; }
-        #status.error { background: #fed7d7; color: #9b2c2c; display: block; }
-        #status.success { background: #c6f6d5; color: #22543d; display: block; }
+        @media (min-width: 900px) {
+            .main-content {
+                grid-template-columns: 2fr 1fr;
+            }
+        }
 
         #map {
-            height: 550px;
+            height: 450px;
             width: 100%;
             border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            border: 1px solid var(--border);
             z-index: 1;
         }
 
-        @media (max-width: 600px) {
-            body { padding: 10px; }
-            #map { height: 400px; }
+        .chart-container {
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            padding: 1rem;
+            height: 250px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 1rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border);
+            margin-top: auto;
         }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>🚴‍♂️ Visualiseur de Traces GPS</h1>
-        <p>Glissez-déposez un fichier <strong>.GPX</strong> ou <strong>.FIT</strong> pour afficher la carte et les statistiques</p>
+        <h1>📍 Visualiseur GPX & FIT</h1>
     </header>
 
-    <div class="dropzone" id="dropzone">
-        <svg width="48" height="48" fill="none" stroke="#4a5568" viewBox="0 0 24 24" style="margin:0 auto; display:block;">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-        </svg>
-        <p>Cliquez ou glissez un fichier <strong>.gpx</strong> ou <strong>.fit</strong> ici</p>
-        <input type="file" id="fileInput" accept=".gpx,.fit" />
+    <div class="container">
+        <!-- Zone de dépôt -->
+        <div class="drop-zone" id="drop-zone">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <h3>Glissez-déposez votre fichier ici</h3>
+            <p>Formats pris en charge : <strong>.GPX</strong> et <strong>.FIT</strong></p>
+            <button class="btn" onclick="document.getElementById('file-input').click()">Choisir un fichier</button>
+            <input type="file" id="file-input" accept=".gpx,.fit,.FIT,.GPX,*/*">
+        </div>
+
+        <!-- Zone de status / message d'erreur -->
+        <div id="status-box" class="status-box"></div>
+
+        <!-- Grille de statistiques -->
+        <div class="stats-grid" id="stats-container" style="display: none;">
+            <div class="stat-card">
+                <div class="label">Distance</div>
+                <div class="value" id="stat-distance">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Dénivelé +</div>
+                <div class="value" id="stat-ele-gain">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Alt. Max</div>
+                <div class="value" id="stat-ele-max">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Durée</div>
+                <div class="value" id="stat-duration">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="label">Vitesse Moy.</div>
+                <div class="value" id="stat-speed">-</div>
+            </div>
+        </div>
+
+        <!-- Carte et Graphique -->
+        <div class="main-content">
+            <div id="map"></div>
+            <div class="chart-container">
+                <canvas id="elevation-chart"></canvas>
+            </div>
+        </div>
     </div>
 
-    <div id="status"></div>
+    <footer>
+        Visualiseur de traces GPS gratuit & respectueux de la vie privée (traitement 100% local dans le navigateur).
+    </footer>
 
-    <div class="stats-grid">
-        <div class="stat-card" style="border-color: #3182ce;">
-            <div class="label">Distance Totale</div>
-            <div class="value" id="stat-distance">-- km</div>
-        </div>
-        <div class="stat-card" style="border-color: #38a169;">
-            <div class="label">Dénivelé Positif (D+)</div>
-            <div class="value" id="stat-ele">-- m</div>
-        </div>
-        <div class="stat-card" style="border-color: #dd6b20;">
-            <div class="label">Durée</div>
-            <div class="value" id="stat-duration">--</div>
-        </div>
-        <div class="stat-card" style="border-color: #805ad5;">
-            <div class="label">Vitesse Moyenne</div>
-            <div class="value" id="stat-speed">-- km/h</div>
-        </div>
-    </div>
+    <!-- Script de logique JS en ES Module -->
+    <script type="module">
+        import FitParser from 'https://cdn.jsdelivr.net/npm/fit-file-parser@1.9.0/+esm';
 
-    <div id="map"></div>
-
-    <!-- Librairie Leaflet JS pour la carte -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <!-- Librairie Fit-Parser JS pour les fichiers .FIT -->
-    <script src="https://cdn.jsdelivr.net/npm/fit-file-parser@1.9.0/dist/fit-parser.min.js"></script>
-
-    <script>
-        // Initialisation de la carte OpenStreetMap
-        const map = L.map('map').setView([46.603354, 1.888334], 6); // Centré sur la France
+        // Initialisation Carte Leaflet
+        const map = L.map('map').setView([46.603354, 1.888334], 6);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
         }).addTo(map);
 
         let currentLayer = null;
+        let elevationChart = null;
 
-        const dropzone = document.getElementById('dropzone');
-        const fileInput = document.getElementById('fileInput');
-        const statusDiv = document.getElementById('status');
+        // Éléments DOM
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const statusBox = document.getElementById('status-box');
+        const statsContainer = document.getElementById('stats-container');
 
-        // Événements Drag & Drop
-        dropzone.addEventListener('click', () => fileInput.click());
-        dropzone.addEventListener('dragover', (e) => {
+        // Événements glisser-déposer
+        dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
-            dropzone.classList.add('dragover');
+            dropZone.classList.add('dragover');
         });
-        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
-        dropzone.addEventListener('drop', (e) => {
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
-            dropzone.classList.remove('dragover');
+            dropZone.classList.remove('dragover');
             if (e.dataTransfer.files.length > 0) {
                 handleFile(e.dataTransfer.files[0]);
             }
@@ -201,199 +296,258 @@
         });
 
         function showStatus(message, type = 'info') {
-            statusDiv.className = type;
-            statusDiv.innerText = message;
+            statusBox.textContent = message;
+            statusBox.className = `status-box ${type}`;
         }
 
-        function handleFile(file) {
-            const fileName = file.name.toLowerCase();
-            showStatus(`Analyse du fichier : ${file.name}...`, 'info');
+        function clearStatus() {
+            statusBox.textContent = '';
+            statusBox.className = 'status-box';
+        }
 
-            if (fileName.endsWith('.gpx')) {
-                readGPX(file);
-            } else if (fileName.endsWith('.fit')) {
-                readFIT(file);
-            } else {
-                showStatus('Format non supporté ! Veuillez fournir un fichier .gpx ou .fit', 'error');
+        // Gestionnaire de fichier principal
+        async function handleFile(file) {
+            clearStatus();
+            showStatus(`Chargement et analyse de "${file.name}"...`, 'info');
+
+            const name = file.name.toLowerCase();
+            try {
+                if (name.endsWith('.gpx')) {
+                    const text = await file.text();
+                    parseGPX(text);
+                } else if (name.endsWith('.fit')) {
+                    const buffer = await file.arrayBuffer();
+                    parseFIT(buffer);
+                } else {
+                    const text = await file.text();
+                    if (text.includes('<gpx')) {
+                        parseGPX(text);
+                    } else {
+                        const buffer = await file.arrayBuffer();
+                        parseFIT(buffer);
+                    }
+                }
+            } catch (err) {
+                console.error(err);
+                showStatus(`Erreur lors de la lecture du fichier : ${err.message || err}`, 'error');
             }
         }
 
-        // --- TRAITEMENT FICHIERS .GPX (Texte / XML) ---
-        function readGPX(file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const xmlDoc = new DOMParser().parseFromString(e.target.result, 'text/xml');
-                    const trackPoints = xmlDoc.querySelectorAll('trkpt, rtept, wpt');
-                    
-                    if (trackPoints.length === 0) {
-                        showStatus('Aucun point GPS trouvé dans ce fichier GPX.', 'error');
-                        return;
+        // --- PARSEUR GPX NATIF ---
+        function parseGPX(xmlText) {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+            
+            const parseError = xmlDoc.querySelector('parsererror');
+            if (parseError) {
+                throw new Error('Fichier GPX invalide ou corrompu.');
+            }
+
+            const trkpts = xmlDoc.getElementsByTagName('trkpt');
+            if (trkpts.length === 0) {
+                throw new Error('Aucun point de trace (trkpt) trouvé dans ce fichier GPX.');
+            }
+
+            const points = [];
+            for (let i = 0; i < trkpts.length; i++) {
+                const pt = trkpts[i];
+                const lat = parseFloat(pt.getAttribute('lat'));
+                const lon = parseFloat(pt.getAttribute('lon'));
+                
+                const eleNode = pt.getElementsByTagName('ele')[0];
+                const ele = eleNode ? parseFloat(eleNode.textContent) : 0;
+
+                const timeNode = pt.getElementsByTagName('time')[0];
+                const time = timeNode ? new Date(timeNode.textContent) : null;
+
+                if (!isNaN(lat) && !isNaN(lon)) {
+                    points.push({ lat, lon, ele, time });
+                }
+            }
+
+            renderData(points);
+        }
+
+        // --- PARSEUR FIT ---
+        function parseFIT(arrayBuffer) {
+            const fitParser = new FitParser({
+                force: true,
+                speedUnit: 'km/h',
+                lengthUnit: 'km',
+                temperatureUnit: 'celsius',
+                elapsedRecordField: true
+            });
+
+            fitParser.parse(arrayBuffer, (error, data) => {
+                if (error) {
+                    showStatus(`Erreur d'analyse FIT : ${error}`, 'error');
+                    return;
+                }
+
+                if (!data || !data.records || data.records.length === 0) {
+                    showStatus('Aucun enregistrement de géolocalisation trouvé dans ce fichier .FIT', 'error');
+                    return;
+                }
+
+                const points = [];
+                for (const rec of data.records) {
+                    if (rec.position_lat !== undefined && rec.position_long !== undefined) {
+                        let lat = rec.position_lat;
+                        let lon = rec.position_long;
+                        // Conversion semicircles -> degrés si nécessaire
+                        if (Math.abs(lat) > 90) {
+                            lat = lat * (180 / 2147483648);
+                        }
+                        if (Math.abs(lon) > 180) {
+                            lon = lon * (180 / 2147483648);
+                        }
+
+                        const ele = rec.altitude || rec.enhanced_altitude || 0;
+                        const time = rec.timestamp ? new Date(rec.timestamp) : null;
+
+                        points.push({ lat, lon, ele, time });
                     }
-
-                    const points = [];
-                    trackPoints.forEach(pt => {
-                        const lat = parseFloat(pt.getAttribute('lat'));
-                        const lon = parseFloat(pt.getAttribute('lon'));
-                        const eleNode = pt.querySelector('ele');
-                        const timeNode = pt.querySelector('time');
-
-                        const ele = eleNode ? parseFloat(eleNode.textContent) : null;
-                        const time = timeNode ? new Date(timeNode.textContent) : null;
-
-                        if (!isNaN(lat) && !isNaN(lon)) {
-                            points.push({ lat, lon, ele, time });
-                        }
-                    });
-
-                    processPoints(points, file.name);
-                } catch (err) {
-                    console.error(err);
-                    showStatus('Erreur lors du traitement du fichier GPX.', 'error');
                 }
-            };
-            reader.readAsText(file);
+
+                if (points.length === 0) {
+                    showStatus('Le fichier FIT ne contient pas de coordonnées GPS exploitables.', 'error');
+                    return;
+                }
+
+                renderData(points);
+            });
         }
 
-        // --- TRAITEMENT FICHIERS .FIT (Binaire) ---
-        function readFIT(file) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const fitParser = new FitParser({
-                        force: true,
-                        speedUnit: 'km/h',
-                        lengthUnit: 'km',
-                        elapsedRecordField: true,
-                        mode: 'cascade'
-                    });
-
-                    fitParser.parse(e.target.result, function(error, data) {
-                        if (error) {
-                            console.error(error);
-                            showStatus('Erreur de lecture du fichier .FIT : ' + error.message, 'error');
-                            return;
-                        }
-
-                        const records = data.records || [];
-                        const points = [];
-
-                        records.forEach(rec => {
-                            if (rec.position_lat !== undefined && rec.position_long !== undefined) {
-                                // Conversion Semicircles -> Degrés
-                                const lat = rec.position_lat * (180 / 2147483648);
-                                const lon = rec.position_long * (180 / 2147483648);
-                                const ele = rec.altitude !== undefined ? rec.altitude : null;
-                                const time = rec.timestamp ? new Date(rec.timestamp) : null;
-
-                                points.push({ lat, lon, ele, time });
-                            }
-                        });
-
-                        if (points.length === 0) {
-                            showStatus('Aucune coordonnée GPS exploitable trouvée dans ce fichier FIT.', 'error');
-                            return;
-                        }
-
-                        processPoints(points, file.name);
-                    });
-                } catch (err) {
-                    console.error(err);
-                    showStatus('Erreur lors du traitement du fichier FIT.', 'error');
-                }
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
-        // --- CALCULS DES STATISTIQUES ET AFFICHAGE SUR LA CARTE ---
-        function processPoints(points, filename) {
-            if (points.length < 2) {
-                showStatus('Nombre de points GPS insuffisant pour tracer un parcours.', 'error');
+        // --- AFFICHAGE ET CALCULS ---
+        function renderData(points) {
+            if (points.length === 0) {
+                showStatus('Aucune donnée GPS valide à afficher.', 'error');
                 return;
             }
 
-            let totalDistance = 0; // en km
-            let totalElevationGain = 0; // en m
-            const latLngs = [];
+            if (currentLayer) map.removeLayer(currentLayer);
 
-            for (let i = 0; i < points.length; i++) {
-                const current = points[i];
-                latLngs.push([current.lat, current.lon]);
+            const latLngs = points.map(p => [p.lat, p.lon]);
+            
+            currentLayer = L.polyline(latLngs, { color: '#2563eb', weight: 4, opacity: 0.85 }).addTo(map);
 
-                if (i > 0) {
-                    const prev = points[i - 1];
-                    totalDistance += haversineDistance(prev.lat, prev.lon, current.lat, current.lon);
+            const startPt = points[0];
+            const endPt = points[points.length - 1];
 
-                    if (current.ele !== null && prev.ele !== null) {
-                        const diff = current.ele - prev.ele;
-                        if (diff > 0.5) { // Filtre anti-bruit pour l'altitude
-                            totalElevationGain += diff;
+            L.circleMarker([startPt.lat, startPt.lon], { radius: 7, fillColor: '#10b981', color: '#fff', weight: 2, fillOpacity: 1 }).addTo(currentLayer).bindPopup('Départ');
+            L.circleMarker([endPt.lat, endPt.lon], { radius: 7, fillColor: '#ef4444', color: '#fff', weight: 2, fillOpacity: 1 }).addTo(currentLayer).bindPopup('Arrivée');
+
+            map.fitBounds(currentLayer.getBounds(), { padding: [30, 30] });
+
+            let totalDist = 0;
+            let eleGain = 0;
+            let maxEle = points[0].ele;
+
+            const distData = [0];
+
+            for (let i = 1; i < points.length; i++) {
+                const d = haversineDistance(points[i - 1], points[i]);
+                totalDist += d;
+                distData.push(totalDist);
+
+                const eleDiff = points[i].ele - points[i - 1].ele;
+                if (eleDiff > 0) eleGain += eleDiff;
+
+                if (points[i].ele > maxEle) maxEle = points[i].ele;
+            }
+
+            let durationText = '-';
+            let speedText = '-';
+            if (startPt.time && endPt.time) {
+                const diffMs = endPt.time - startPt.time;
+                if (diffMs > 0) {
+                    const totalSec = Math.floor(diffMs / 1000);
+                    const hrs = Math.floor(totalSec / 3600);
+                    const mins = Math.floor((totalSec % 3600) / 60);
+                    const secs = totalSec % 60;
+                    durationText = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m ${secs}s`;
+
+                    const hoursDecimal = diffMs / (1000 * 60 * 60);
+                    const avgSpeed = totalDist / hoursDecimal;
+                    speedText = `${avgSpeed.toFixed(1)} km/h`;
+                }
+            }
+
+            document.getElementById('stat-distance').textContent = `${totalDist.toFixed(2)} km`;
+            document.getElementById('stat-ele-gain').textContent = `${Math.round(eleGain)} m`;
+            document.getElementById('stat-ele-max').textContent = `${Math.round(maxEle)} m`;
+            document.getElementById('stat-duration').textContent = durationText;
+            document.getElementById('stat-speed').textContent = speedText;
+
+            statsContainer.style.display = 'grid';
+            showStatus(`Trace chargée avec succès : ${points.length} points GPS.`, 'info');
+
+            renderChart(distData, points.map(p => p.ele));
+        }
+
+        function haversineDistance(pt1, pt2) {
+            const R = 6371;
+            const dLat = (pt2.lat - pt1.lat) * Math.PI / 180;
+            const dLon = (pt2.lon - pt1.lon) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(pt1.lat * Math.PI / 180) * Math.cos(pt2.lat * Math.PI / 180) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        function renderChart(distances, elevations) {
+            const ctx = document.getElementById('elevation-chart').getContext('2d');
+            if (elevationChart) elevationChart.destroy();
+
+            const maxPoints = 300;
+            const step = Math.max(1, Math.floor(distances.length / maxPoints));
+            
+            const sampledDist = [];
+            const sampledEle = [];
+
+            for (let i = 0; i < distances.length; i += step) {
+                sampledDist.push(distances[i].toFixed(1));
+                sampledEle.push(Math.round(elevations[i]));
+            }
+
+            elevationChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: sampledDist,
+                    datasets: [{
+                        label: 'Altitude (m)',
+                        data: sampledEle,
+                        borderColor: '#2563eb',
+                        backgroundColor: 'rgba(37, 99, 235, 0.15)',
+                        fill: true,
+                        tension: 0.2,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: (items) => `Distance : ${items[0].label} km`,
+                                label: (item) => `Altitude : ${item.raw} m`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Distance (km)' },
+                            grid: { display: false }
+                        },
+                        y: {
+                            title: { display: true, text: 'Altitude (m)' }
                         }
                     }
                 }
-            }
-
-            // Calculs de durée et vitesse
-            let durationStr = '--';
-            let speedStr = '-- km/h';
-
-            const startTime = points[0].time;
-            const endTime = points[points.length - 1].time;
-
-            if (startTime && endTime && !isNaN(startTime) && !isNaN(endTime)) {
-                const diffMs = endTime - startTime;
-                if (diffMs > 0) {
-                    const totalSec = Math.floor(diffMs / 1000);
-                    const hours = Math.floor(totalSec / 3600);
-                    const minutes = Math.floor((totalSec % 3600) / 60);
-                    const seconds = totalSec % 60;
-
-                    durationStr = hours > 0 
-                        ? `${hours}h ${minutes}m ${seconds}s` 
-                        : `${minutes}m ${seconds}s`;
-
-                    const hoursDecimal = diffMs / (1000 * 60 * 60);
-                    if (hoursDecimal > 0) {
-                        const avgSpeed = totalDistance / hoursDecimal;
-                        speedStr = avgSpeed.toFixed(1) + ' km/h';
-                    }
-                }
-            }
-
-            // Mise à jour de l'affichage HTML
-            document.getElementById('stat-distance').innerText = totalDistance.toFixed(2) + ' km';
-            document.getElementById('stat-ele').innerText = Math.round(totalElevationGain) + ' m';
-            document.getElementById('stat-duration').innerText = durationStr;
-            document.getElementById('stat-speed').innerText = speedStr;
-
-            // Nettoyer l'ancienne trace sur la carte
-            if (currentLayer) {
-                map.removeLayer(currentLayer);
-            }
-
-            // Créer le tracé bleu et les marqueurs Départ (vert) / Arrivée (rouge)
-            const polyline = L.polyline(latLngs, { color: '#3182ce', weight: 4, opacity: 0.85 });
-            const startMarker = L.circleMarker(latLngs[0], { radius: 7, color: '#276749', fillColor: '#48bb78', fillOpacity: 1 });
-            const endMarker = L.circleMarker(latLngs[latLngs.length - 1], { radius: 7, color: '#9b2c2c', fillColor: '#f56565', fillOpacity: 1 });
-
-            currentLayer = L.layerGroup([polyline, startMarker, endMarker]).addTo(map);
-
-            // Centrer et zoomer automatiquement la carte sur le parcours
-            map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
-
-            showStatus(`Succès ! Fichier "${filename}" chargé (${points.length} points GPS).`, 'success');
-        }
-
-        // Formule mathématique de Haversine (calcul de distance GPS)
-        function haversineDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371; // Rayon moyen de la Terre en km
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                      Math.sin(dLon/2) * Math.sin(dLon/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return R * c;
+            });
         }
     </script>
 </body>
