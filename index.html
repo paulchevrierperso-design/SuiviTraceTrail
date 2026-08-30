@@ -2,334 +2,391 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Trail Compare GPX & FIT - v2.2</title>
-    
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Leaflet (Carte) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualiseur de Traces GPS (GPX & FIT)</title>
+
+    <!-- Carte Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
-        .no-select {
-            -webkit-user-select: none;
-            user-select: none;
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 4px;
+
+        body {
+            background-color: #f4f6f9;
+            color: #333;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
         }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background-color: #cbd5e1;
-            border-radius: 2px;
+
+        header {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        header h1 {
+            color: #1a202c;
+            font-size: 1.8rem;
+            margin-bottom: 8px;
+        }
+
+        header p {
+            color: #718096;
+            font-size: 0.95rem;
+        }
+
+        .dropzone {
+            background: #ffffff;
+            border: 2px dashed #cbd5e0;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+
+        .dropzone:hover, .dropzone.dragover {
+            border-color: #3182ce;
+            background-color: #ebf8ff;
+        }
+
+        .dropzone p {
+            margin-top: 10px;
+            color: #4a5568;
+            font-weight: 500;
+        }
+
+        .dropzone input[type="file"] {
+            display: none;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: #ffffff;
+            padding: 18px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            text-align: center;
+            border-left: 4px solid #3182ce;
+        }
+
+        .stat-card .label {
+            font-size: 0.85rem;
+            color: #718096;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #2d3748;
+        }
+
+        #status {
+            margin-bottom: 15px;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: 500;
+            display: none;
+        }
+
+        #status.info { background: #e2e8f0; color: #2d3748; display: block; }
+        #status.error { background: #fed7d7; color: #9b2c2c; display: block; }
+        #status.success { background: #c6f6d5; color: #22543d; display: block; }
+
+        #map {
+            height: 550px;
+            width: 100%;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            z-index: 1;
+        }
+
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            #map { height: 400px; }
         }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 font-sans h-screen flex flex-col overflow-hidden no-select">
+<body>
 
-    <!-- Header -->
-    <header class="bg-slate-800 border-b border-slate-700 px-4 py-3 flex justify-between items-center shrink-0">
-        <h1 class="text-lg font-bold tracking-tight text-emerald-400 flex items-center gap-2">
-            🏃‍♂️ Trail Compare <span class="text-xs px-2 py-0.5 bg-slate-700 text-slate-300 rounded-full">v2.2</span>
-        </h1>
-        <label class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-2 rounded-lg cursor-pointer transition-colors flex items-center gap-1 shadow-md active:scale-95">
-            📥 Importer GPX / FIT
-            <input type="file" id="file-input" multiple accept=".gpx,.fit" class="hidden">
-        </label>
+    <header>
+        <h1>🚴‍♂️ Visualiseur de Traces GPS</h1>
+        <p>Glissez-déposez un fichier <strong>.GPX</strong> ou <strong>.FIT</strong> pour afficher la carte et les statistiques</p>
     </header>
 
-    <!-- Zone principale -->
-    <main class="flex-1 flex flex-col overflow-hidden">
-        
-        <!-- Conteneur Carte -->
-        <div id="map-container" class="relative shrink-0" style="height: 35vh; min-height: 120px;">
-            <div id="map" class="h-full w-full bg-slate-950"></div>
-        </div>
+    <div class="dropzone" id="dropzone">
+        <svg width="48" height="48" fill="none" stroke="#4a5568" viewBox="0 0 24 24" style="margin:0 auto; display:block;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+        </svg>
+        <p>Cliquez ou glissez un fichier <strong>.gpx</strong> ou <strong>.fit</strong> ici</p>
+        <input type="file" id="fileInput" accept=".gpx,.fit" />
+    </div>
 
-        <!-- Diviseur Redimensionnable 1 (Carte <-> Reste) -->
-        <div id="resizer-1" class="h-2.5 bg-slate-850 hover:bg-emerald-500 active:bg-emerald-600 cursor-row-resize flex items-center justify-center shrink-0 border-y border-slate-800 transition-colors z-20">
-            <div class="w-10 h-1 bg-slate-600 rounded"></div>
-        </div>
+    <div id="status"></div>
 
-        <!-- Curseur de progression + Selecteur Mode -->
-        <div class="bg-slate-800 px-4 py-2 border-b border-slate-700 flex flex-col gap-2 shrink-0">
-            <div class="flex justify-between items-center text-xs text-slate-400 font-medium">
-                <span class="flex items-center gap-1">
-                    Position Curseur : <span id="slider-val" class="text-emerald-400 font-bold font-mono">0 %</span>
-                </span>
-                
-                <!-- Sélecteur de Mode -->
-                <div class="flex bg-slate-950 p-0.5 rounded-lg border border-slate-750">
-                    <button id="btn-mode-dist" class="px-2.5 py-1 text-[10px] font-bold rounded-md bg-emerald-600 text-white transition-all">📏 Distance</button>
-                    <button id="btn-mode-time" class="px-2.5 py-1 text-[10px] font-bold rounded-md text-slate-400 hover:text-slate-200 transition-all">⏱️ Temps</button>
-                </div>
-            </div>
-            <input type="range" id="progress-slider" min="0" max="100" value="0" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500">
+    <div class="stats-grid">
+        <div class="stat-card" style="border-color: #3182ce;">
+            <div class="label">Distance Totale</div>
+            <div class="value" id="stat-distance">-- km</div>
         </div>
-
-        <!-- LIGNE DE DÉPART VIRTUELLE (Nouveauté v2.2) -->
-        <div class="bg-slate-800/90 px-4 py-2 border-b border-slate-700 flex flex-col gap-1 shrink-0">
-            <div class="flex justify-between items-center font-bold text-[11px] uppercase tracking-wider text-slate-300">
-                <span class="flex items-center gap-1.5">🚩 Ligne de Départ Virtuelle (Alignement)</span>
-                <span id="start-line-status" class="text-slate-500 text-[10px] font-mono">Désactivée (Départ réel)</span>
-            </div>
-            <div class="flex items-center gap-3 mt-1">
-                <input type="range" id="slider-start-line" min="0" max="95" value="0" step="1" class="flex-1 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-red-500">
-                <button id="btn-reset-start-line" class="text-[9px] font-bold bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded text-slate-300 transition-colors uppercase shrink-0">
-                    Reset
-                </button>
-            </div>
+        <div class="stat-card" style="border-color: #38a169;">
+            <div class="label">Dénivelé Positif (D+)</div>
+            <div class="value" id="stat-ele">-- m</div>
         </div>
-
-        <!-- Conteneur Graphique -->
-        <div id="chart-container" class="relative bg-slate-950 p-2 shrink-0" style="height: 22vh; min-height: 100px;">
-            <canvas id="profileChart" class="w-full h-full"></canvas>
+        <div class="stat-card" style="border-color: #dd6b20;">
+            <div class="label">Durée</div>
+            <div class="value" id="stat-duration">--</div>
         </div>
-
-        <!-- Diviseur Redimensionnable 2 (Graphique <-> Liste) -->
-        <div id="resizer-2" class="h-2.5 bg-slate-850 hover:bg-emerald-500 active:bg-emerald-600 cursor-row-resize flex items-center justify-center shrink-0 border-y border-slate-800 transition-colors z-20">
-            <div class="w-10 h-1 bg-slate-600 rounded"></div>
+        <div class="stat-card" style="border-color: #805ad5;">
+            <div class="label">Vitesse Moyenne</div>
+            <div class="value" id="stat-speed">-- km/h</div>
         </div>
+    </div>
 
-        <!-- Section Liste des traces -->
-        <section class="flex-1 flex flex-col overflow-hidden bg-slate-900">
-            <div class="px-4 py-2 bg-slate-800/50 flex justify-between items-center border-b border-slate-800 shrink-0">
-                <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400">Traces Importées</h2>
-                <span id="compare-count" class="text-xs text-slate-300 bg-slate-700 px-2 py-0.5 rounded-md font-mono">0 sélectionnée(s)</span>
-            </div>
-            
-            <div class="flex-1 overflow-y-auto custom-scrollbar">
-                <!-- État vide -->
-                <div id="empty-state" class="p-8 text-center text-slate-500 flex flex-col items-center justify-center gap-2 h-full">
-                    <span class="text-3xl">🗺️</span>
-                    <p class="text-sm">Aucune trace importée.</p>
-                    <p class="text-xs text-slate-600">Touchez "Importer GPX / FIT" en haut à droite pour commencer.</p>
-                </div>
-                <!-- Liste des traces -->
-                <div id="tracks-list" class="divide-y divide-slate-800/60"></div>
-            </div>
-        </section>
-    </main>
+    <div id="map"></div>
+
+    <!-- Librairie Leaflet JS pour la carte -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Librairie Fit-Parser JS pour les fichiers .FIT -->
+    <script src="https://cdn.jsdelivr.net/npm/fit-file-parser@1.9.0/dist/fit-parser.min.js"></script>
 
     <script>
-        const PALETTE = [
-            { hex: '#3b82f6', rgb: '59, 130, 246' },   // Bleu
-            { hex: '#10b981', rgb: '16, 185, 129' },   // Émeraude
-            { hex: '#f59e0b', rgb: '245, 158, 11' },   // Ambre
-            { hex: '#ec4899', rgb: '236, 72, 153' },   // Rose
-            { hex: '#8b5cf6', rgb: '139, 92, 246' },   // Violet
-            { hex: '#06b6d4', rgb: '6, 182, 212' },    // Cyan
-            { hex: '#ef4444', rgb: '239, 68, 68' },    // Rouge
-            { hex: '#a855f7', rgb: '168, 85, 247' },   // Violet clair
-            { hex: '#14b8a6', rgb: '20, 184, 166' }    // Turquoise
-        ];
+        // Initialisation de la carte OpenStreetMap
+        const map = L.map('map').setView([46.603354, 1.888334], 6); // Centré sur la France
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
 
-        let tracks = [];
-        let selectedTrackIds = []; 
-        let comparisonMode = 'distance'; 
-        let map, chart;
-        let mapMarkers = {}; 
-        let mapPolylines = {}; 
-        let startLineMarker = null;
+        let currentLayer = null;
 
-        // ==========================================
-        // DÉCODEUR FIT NATIF (Avec Horodatage)
-        // ==========================================
-        class SimpleFitParser {
-            constructor(arrayBuffer) {
-                this.view = new DataView(arrayBuffer);
-                this.offset = 0;
-                this.definitions = {};
-                this.records = [];
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const statusDiv = document.getElementById('status');
+
+        // Événements Drag & Drop
+        dropzone.addEventListener('click', () => fileInput.click());
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                handleFile(e.dataTransfer.files[0]);
             }
+        });
 
-            parse() {
-                if (this.view.byteLength < 12) throw new Error("Fichier trop court.");
-                const headerSize = this.view.getUint8(0);
-                const signature = String.fromCharCode(
-                    this.view.getUint8(8), this.view.getUint8(9),
-                    this.view.getUint8(10), this.view.getUint8(11)
-                );
-                if (signature !== ".FIT") throw new Error("Format FIT invalide.");
-
-                const dataSize = this.view.getUint32(4, true);
-                this.offset = headerSize;
-                const endOffset = headerSize + dataSize;
-
-                while (this.offset < endOffset && this.offset < this.view.byteLength) {
-                    const headerByte = this.view.getUint8(this.offset);
-                    this.offset++;
-
-                    if ((headerByte & 0x80) === 0x80) {
-                        const localMsgType = (headerByte >> 5) & 0x03;
-                        this.parseDataMessage(localMsgType);
-                        continue;
-                    }
-
-                    const isDefinition = (headerByte & 0x40) === 0x40;
-                    const hasDevData = (headerByte & 0x20) === 0x20;
-                    const localMsgType = headerByte & 0x0F;
-
-                    if (isDefinition) {
-                        this.parseDefinitionMessage(localMsgType, hasDevData);
-                    } else {
-                        this.parseDataMessage(localMsgType);
-                    }
-                }
-                return { records: this.records };
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
             }
+        });
 
-            parseDefinitionMessage(localMsgType, hasDevData) {
-                if (this.offset + 5 > this.view.byteLength) { this.offset = this.view.byteLength; return; }
-                this.offset++; 
-                const architecture = this.view.getUint8(this.offset);
-                this.offset++;
-                const isLittleEndian = (architecture === 0);
-                const globalMsgNum = this.view.getUint16(this.offset, isLittleEndian);
-                this.offset += 2;
-                const numFields = this.view.getUint8(this.offset);
-                this.offset++;
+        function showStatus(message, type = 'info') {
+            statusDiv.className = type;
+            statusDiv.innerText = message;
+        }
 
-                const fields = [];
-                for (let i = 0; i < numFields; i++) {
-                    if (this.offset + 3 > this.view.byteLength) break;
-                    const fieldNum = this.view.getUint8(this.offset);
-                    const size = this.view.getUint8(this.offset + 1);
-                    const baseType = this.view.getUint8(this.offset + 2);
-                    this.offset += 3;
-                    fields.push({ fieldNum, size, baseType });
-                }
+        function handleFile(file) {
+            const fileName = file.name.toLowerCase();
+            showStatus(`Analyse du fichier : ${file.name}...`, 'info');
 
-                let devFields = [];
-                if (hasDevData && this.offset < this.view.byteLength) {
-                    const numDevFields = this.view.getUint8(this.offset);
-                    this.offset++;
-                    for (let i = 0; i < numDevFields; i++) {
-                        if (this.offset + 3 > this.view.byteLength) break;
-                        const fieldNum = this.view.getUint8(this.offset);
-                        const size = this.view.getUint8(this.offset + 1);
-                        this.offset += 3;
-                        devFields.push({ fieldNum, size });
-                    }
-                }
-
-                this.definitions[localMsgType] = { globalMsgNum, isLittleEndian, fields, devFields };
+            if (fileName.endsWith('.gpx')) {
+                readGPX(file);
+            } else if (fileName.endsWith('.fit')) {
+                readFIT(file);
+            } else {
+                showStatus('Format non supporté ! Veuillez fournir un fichier .gpx ou .fit', 'error');
             }
+        }
 
-            parseDataMessage(localMsgType) {
-                const def = this.definitions[localMsgType];
-                if (!def) { this.offset = this.view.byteLength; return; }
-
-                const record = {};
-                const isRecordMessage = (def.globalMsgNum === 20); 
-
-                def.fields.forEach(field => {
-                    const value = this.readFieldValue(field.size, field.baseType, def.isLittleEndian);
-                    if (isRecordMessage) {
-                        if (field.fieldNum === 0 && value !== null) record.position_lat = value;
-                        if (field.fieldNum === 1 && value !== null) record.position_long = value;
-                        if (field.fieldNum === 2 && value !== null) record.altitude = (value / 5.0) - 500.0;
-                        if (field.fieldNum === 78 && value !== null) record.enhanced_altitude = (value / 3000.0) - 500.0;
-                        if (field.fieldNum === 5 && value !== null) record.distance = value / 100.0;
-                        if (field.fieldNum === 253 && value !== null) record.timestamp = value; 
-                    }
-                });
-
-                def.devFields.forEach(field => { this.offset += field.size; });
-
-                if (isRecordMessage && (record.position_lat !== undefined || record.position_long !== undefined)) {
-                    this.records.push(record);
-                }
-            }
-
-            readFieldValue(size, baseType, isLittleEndian) {
-                if (this.offset + size > this.view.byteLength) { this.offset += size; return null; }
-                let val = null;
+        // --- TRAITEMENT FICHIERS .GPX (Texte / XML) ---
+        function readGPX(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
                 try {
-                    switch(baseType) {
-                        case 0x01: val = this.view.getInt8(this.offset); if (val === 0x7F) val = null; break;
-                        case 0x00: 
-                        case 0x02: 
-                        case 0x0A: val = this.view.getUint8(this.offset); if (val === 0xFF) val = null; break;
-                        case 0x83: val = this.view.getInt16(this.offset, isLittleEndian); if (val === 0x7FFF) val = null; break;
-                        case 0x84: 
-                        case 0x8B: val = this.view.getUint16(this.offset, isLittleEndian); if (val === 0xFFFF) val = null; break;
-                        case 0x85: val = this.view.getInt32(this.offset, isLittleEndian); if (val === 0x7FFFFFFF) val = null; break;
-                        case 0x86: 
-                        case 0x8C: val = this.view.getUint32(this.offset, isLittleEndian); if (val === 0xFFFFFFFF) val = null; break;
-                        case 0x88: val = this.view.getFloat32(this.offset, isLittleEndian); if (isNaN(val)) val = null; break;
-                        case 0x89: val = this.view.getFloat64(this.offset, isLittleEndian); if (isNaN(val)) val = null; break;
+                    const xmlDoc = new DOMParser().parseFromString(e.target.result, 'text/xml');
+                    const trackPoints = xmlDoc.querySelectorAll('trkpt, rtept, wpt');
+                    
+                    if (trackPoints.length === 0) {
+                        showStatus('Aucun point GPS trouvé dans ce fichier GPX.', 'error');
+                        return;
                     }
-                } catch(e) {}
-                this.offset += size; 
-                return val;
-            }
-        }
 
-        function formatTime(totalSeconds) {
-            if (totalSeconds === undefined || totalSeconds === null || isNaN(totalSeconds)) return "--:--:--";
-            const h = Math.floor(totalSeconds / 3600);
-            const m = Math.floor((totalSeconds % 3600) / 60);
-            const s = Math.floor(totalSeconds % 60);
-            return [
-                h.toString().padStart(2, '0'),
-                m.toString().padStart(2, '0'),
-                s.toString().padStart(2, '0')
-            ].join(':');
-        }
+                    const points = [];
+                    trackPoints.forEach(pt => {
+                        const lat = parseFloat(pt.getAttribute('lat'));
+                        const lon = parseFloat(pt.getAttribute('lon'));
+                        const eleNode = pt.querySelector('ele');
+                        const timeNode = pt.querySelector('time');
 
-        function initMap() {
-            map = L.map('map', { zoomControl: false }).setView([46.603354, 1.888334], 6);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap'
-            }).addTo(map);
-            L.control.zoom({ position: 'bottomright' }).addTo(map);
-        }
+                        const ele = eleNode ? parseFloat(eleNode.textContent) : null;
+                        const time = timeNode ? new Date(timeNode.textContent) : null;
 
-        function initChart() {
-            const ctx = document.getElementById('profileChart').getContext('2d');
-            chart = new Chart(ctx, {
-                type: 'line',
-                data: { datasets: [] },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            mode: 'index',
-                            intersect: false,
-                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                            titleColor: '#94a3b8',
-                            bodyColor: '#f1f5f9',
-                            borderColor: '#334155',
-                            borderWidth: 1
+                        if (!isNaN(lat) && !isNaN(lon)) {
+                            points.push({ lat, lon, ele, time });
                         }
-                    },
-                    scales: {
-                        x: {
-                            type: 'linear',
-                            position: 'bottom',
-                            title: { display: true, text: 'Distance (km)', color: '#94a3b8', font: { size: 10 } },
-                            grid: { color: '#334155' },
-                            ticks: { color: '#94a3b8', font: { size: 9 } }
-                        },
-                        y: {
-                            title: { display: true, text: 'Alt. (m)', color: '#94a3b8', font: { size: 10 } },
-                            grid: { color: '#334155' },
-                            ticks: { color: '#94a3b8', font: { size: 9 } }
+                    });
+
+                    processPoints(points, file.name);
+                } catch (err) {
+                    console.error(err);
+                    showStatus('Erreur lors du traitement du fichier GPX.', 'error');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // --- TRAITEMENT FICHIERS .FIT (Binaire) ---
+        function readFIT(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const fitParser = new FitParser({
+                        force: true,
+                        speedUnit: 'km/h',
+                        lengthUnit: 'km',
+                        elapsedRecordField: true,
+                        mode: 'cascade'
+                    });
+
+                    fitParser.parse(e.target.result, function(error, data) {
+                        if (error) {
+                            console.error(error);
+                            showStatus('Erreur de lecture du fichier .FIT : ' + error.message, 'error');
+                            return;
+                        }
+
+                        const records = data.records || [];
+                        const points = [];
+
+                        records.forEach(rec => {
+                            if (rec.position_lat !== undefined && rec.position_long !== undefined) {
+                                // Conversion Semicircles -> Degrés
+                                const lat = rec.position_lat * (180 / 2147483648);
+                                const lon = rec.position_long * (180 / 2147483648);
+                                const ele = rec.altitude !== undefined ? rec.altitude : null;
+                                const time = rec.timestamp ? new Date(rec.timestamp) : null;
+
+                                points.push({ lat, lon, ele, time });
+                            }
+                        });
+
+                        if (points.length === 0) {
+                            showStatus('Aucune coordonnée GPS exploitable trouvée dans ce fichier FIT.', 'error');
+                            return;
+                        }
+
+                        processPoints(points, file.name);
+                    });
+                } catch (err) {
+                    console.error(err);
+                    showStatus('Erreur lors du traitement du fichier FIT.', 'error');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // --- CALCULS DES STATISTIQUES ET AFFICHAGE SUR LA CARTE ---
+        function processPoints(points, filename) {
+            if (points.length < 2) {
+                showStatus('Nombre de points GPS insuffisant pour tracer un parcours.', 'error');
+                return;
+            }
+
+            let totalDistance = 0; // en km
+            let totalElevationGain = 0; // en m
+            const latLngs = [];
+
+            for (let i = 0; i < points.length; i++) {
+                const current = points[i];
+                latLngs.push([current.lat, current.lon]);
+
+                if (i > 0) {
+                    const prev = points[i - 1];
+                    totalDistance += haversineDistance(prev.lat, prev.lon, current.lat, current.lon);
+
+                    if (current.ele !== null && prev.ele !== null) {
+                        const diff = current.ele - prev.ele;
+                        if (diff > 0.5) { // Filtre anti-bruit pour l'altitude
+                            totalElevationGain += diff;
                         }
                     }
                 }
-            });
+            }
+
+            // Calculs de durée et vitesse
+            let durationStr = '--';
+            let speedStr = '-- km/h';
+
+            const startTime = points[0].time;
+            const endTime = points[points.length - 1].time;
+
+            if (startTime && endTime && !isNaN(startTime) && !isNaN(endTime)) {
+                const diffMs = endTime - startTime;
+                if (diffMs > 0) {
+                    const totalSec = Math.floor(diffMs / 1000);
+                    const hours = Math.floor(totalSec / 3600);
+                    const minutes = Math.floor((totalSec % 3600) / 60);
+                    const seconds = totalSec % 60;
+
+                    durationStr = hours > 0 
+                        ? `${hours}h ${minutes}m ${seconds}s` 
+                        : `${minutes}m ${seconds}s`;
+
+                    const hoursDecimal = diffMs / (1000 * 60 * 60);
+                    if (hoursDecimal > 0) {
+                        const avgSpeed = totalDistance / hoursDecimal;
+                        speedStr = avgSpeed.toFixed(1) + ' km/h';
+                    }
+                }
+            }
+
+            // Mise à jour de l'affichage HTML
+            document.getElementById('stat-distance').innerText = totalDistance.toFixed(2) + ' km';
+            document.getElementById('stat-ele').innerText = Math.round(totalElevationGain) + ' m';
+            document.getElementById('stat-duration').innerText = durationStr;
+            document.getElementById('stat-speed').innerText = speedStr;
+
+            // Nettoyer l'ancienne trace sur la carte
+            if (currentLayer) {
+                map.removeLayer(currentLayer);
+            }
+
+            // Créer le tracé bleu et les marqueurs Départ (vert) / Arrivée (rouge)
+            const polyline = L.polyline(latLngs, { color: '#3182ce', weight: 4, opacity: 0.85 });
+            const startMarker = L.circleMarker(latLngs[0], { radius: 7, color: '#276749', fillColor: '#48bb78', fillOpacity: 1 });
+            const endMarker = L.circleMarker(latLngs[latLngs.length - 1], { radius: 7, color: '#9b2c2c', fillColor: '#f56565', fillOpacity: 1 });
+
+            currentLayer = L.layerGroup([polyline, startMarker, endMarker]).addTo(map);
+
+            // Centrer et zoomer automatiquement la carte sur le parcours
+            map.fitBounds(polyline.getBounds(), { padding: [30, 30] });
+
+            showStatus(`Succès ! Fichier "${filename}" chargé (${points.length} points GPS).`, 'success');
         }
 
-        function getDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371;
+        // Formule mathématique de Haversine (calcul de distance GPS)
+        function haversineDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Rayon moyen de la Terre en km
             const dLat = (lat2 - lat1) * Math.PI / 180;
             const dLon = (lon2 - lon1) * Math.PI / 180;
             const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -338,72 +395,6 @@
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
             return R * c;
         }
-
-        function parseGPX(xmlText, fileName) {
-            const parser = new DOMParser();
-            const xml = parser.parseFromString(xmlText, "text/xml");
-            const trkpts = xml.querySelectorAll("trkpt");
-            
-            const points = [];
-            let totalDistance = 0;
-            let elevationGain = 0;
-            let prevPt = null;
-            let startTime = null;
-
-            trkpts.forEach((pt) => {
-                const lat = parseFloat(pt.getAttribute("lat"));
-                const lon = parseFloat(pt.getAttribute("lon"));
-                const eleEl = pt.querySelector("ele");
-                const ele = eleEl ? parseFloat(eleEl.textContent) : 0;
-                
-                const timeEl = pt.querySelector("time");
-                let elapsedTime = null;
-                if (timeEl) {
-                    const timeMs = new Date(timeEl.textContent).getTime();
-                    if (startTime === null) startTime = timeMs;
-                    elapsedTime = (timeMs - startTime) / 1000; 
-                }
-
-                if (prevPt) {
-                    const d = getDistance(prevPt.lat, prevPt.lon, lat, lon);
-                    totalDistance += d;
-                    if (ele > prevPt.ele) {
-                        elevationGain += (ele - prevPt.ele);
-                    }
-                }
-
-                points.push({ lat, lon, ele, distance: totalDistance, elapsedTime });
-                prevPt = { lat, lon, ele };
-            });
-
-            return {
-                id: 'track_' + Math.random().toString(36).substr(2, 9),
-                name: xml.querySelector("name")?.textContent || fileName.replace(/\.[^/.]+$/, "") + " (GPX)",
-                points: points,
-                totalDistance: totalDistance,
-                elevationGain: Math.round(elevationGain),
-                hasTime: startTime !== null
-            };
-        }
-
-        function parseFIT(fitData, fileName) {
-            const points = [];
-            let totalDistance = 0;
-            let elevationGain = 0;
-            let prevPt = null;
-            let startTime = null;
-
-            if (!fitData || !fitData.records || fitData.records.length === 0) {
-                throw new Error("Aucune coordonnée GPS exploitable.");
-            }
-
-            fitData.records.forEach((record) => {
-                if (record.position_lat !== undefined && record.position_long !== undefined) {
-                    const lat = record.position_lat * (180 / 2147483648);
-                    const lon = record.position_long * (180 / 2147483648);
-                    const ele = record.enhanced_altitude !== undefined ? record.enhanced_altitude : (record.altitude !== undefined ? record.altitude : 0);
-
-                    let distKm = 0;
-                    if (record.distance !== undefined) {
-                        distKm = record.distance / 1000;
-                 
+    </script>
+</body>
+</html>
